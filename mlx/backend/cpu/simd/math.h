@@ -28,6 +28,15 @@ template <typename T, int N>
 Simd<T, N> exp(Simd<T, N> in) {
   if constexpr (is_complex<T>) {
     return Simd<T, 1>{std::exp(in.value)};
+  } else if constexpr (std::is_same_v<T, double>) {
+    if constexpr (N == 1) {
+      return Simd<double, 1>{std::exp(in.value)};
+    } else {
+      alignas(alignof(Simd<double, N>)) double tmp[N];
+      store(tmp, in);
+      for (int i = 0; i < N; ++i) tmp[i] = std::exp(tmp[i]);
+      return load<double, N>(tmp);
+    }
   } else {
     Simd<float, N> x_init = in;
     auto x = x_init * 1.442695f; // multiply with log_2(e)
@@ -43,11 +52,8 @@ Simd<T, N> exp(Simd<T, N> in) {
     x = fma(x, fpart, 6.931472028550421e-1f);
     x = fma(x, fpart, 1.000000000000000f);
 
-    // generate 2**ipart in the floating point representation using integer
-    // bitshifting
     Simd<int, N> epart = (Simd<int, N>(ipart) + 127) << 23;
 
-    // Deal with NaN and Inf
     auto result = select(isnan(x_init), x_init, (*(Simd<float, N>*)&epart) * x);
     result = select(x_init > 88.0f, Simd<float, N>(inf), result);
     result = select(x_init < -88.0f, Simd<float, N>(0), result);
@@ -191,3 +197,5 @@ Simd<T, N> erfinv(Simd<T, N> a_) {
 }
 
 } // namespace mlx::core::simd
+
+

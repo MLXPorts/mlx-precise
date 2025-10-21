@@ -31,9 +31,13 @@ mx::array to_array(
     return mx::array(val, (out_t == mx::bool_) ? mx::int32 : out_t);
   } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
     auto out_t = dtype.value_or(mx::float32);
-    return mx::array(
-        nb::cast<float>(*pv),
-        mx::issubdtype(out_t, mx::floating) ? out_t : mx::float32);
+    auto chosen = mx::issubdtype(out_t, mx::floating) ? out_t : mx::float32;
+    // Preserve Python float precision: build a 1-element NumPy array (double)
+    // and use the ndarray conversion path which honors dtype precisely.
+    nb::object np = nb::module_::import_("numpy");
+    nb::object arr = np.attr("array")(nb::make_tuple(nb::cast<double>(*pv)), nb::arg("dtype") = np.attr("float64"));
+    auto nd = nb::cast<nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>>(arr);
+    return nd_array_to_mlx(nd, chosen);
   } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
     return mx::array(static_cast<mx::complex64_t>(*pv), mx::complex64);
   } else if (auto pv = std::get_if<mx::array>(&v); pv) {
@@ -91,7 +95,7 @@ mx::array to_array_with_accessor(nb::object obj) {
     return nb::cast<mx::array>(obj.attr("__mlx_array__")());
   } else {
     std::ostringstream msg;
-    msg << "Invalid type " << nb::type_name(obj.type()).c_str()
+    msg << "Invalid type  " << nb::type_name(obj.type()).c_str()
         << " received in array initialization.";
     throw std::invalid_argument(msg.str());
   }

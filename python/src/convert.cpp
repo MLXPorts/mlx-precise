@@ -23,6 +23,8 @@ struct ndarray_traits<mx::float16_t> {
   static constexpr bool is_int = false;
   static constexpr bool is_signed = true;
 };
+
+static constexpr dlpack::dtype bfloat16{4, 16, 1};
 }; // namespace nanobind
 
 int check_shape_dim(int64_t dim) {
@@ -49,7 +51,6 @@ mx::array nd_array_to_mlx(
     std::optional<mx::Dtype> dtype) {
   // Compute the shape and size
   mx::Shape shape;
-  shape.reserve(nd_array.ndim());
   for (int i = 0; i < nd_array.ndim(); i++) {
     shape.push_back(check_shape_dim(nd_array.shape(i)));
   }
@@ -94,7 +95,7 @@ mx::array nd_array_to_mlx(
         nd_array, shape, dtype.value_or(mx::float32));
   } else if (type == nb::dtype<double>()) {
     return nd_array_to_mlx_contiguous<double>(
-        nd_array, shape, dtype.value_or(mx::float32));
+        nd_array, shape, dtype.value_or(mx::float64));
   } else if (type == nb::dtype<std::complex<float>>()) {
     return nd_array_to_mlx_contiguous<mx::complex64_t>(
         nd_array, shape, dtype.value_or(mx::complex64));
@@ -470,7 +471,8 @@ mx::array create_array(ArrayInitType v, std::optional<mx::Dtype> t) {
         : mx::int32;
     return mx::array(val, t.value_or(default_type));
   } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
-    return mx::array(nb::cast<float>(*pv), t.value_or(mx::float32));
+    // Preserve full precision of Python floats by parsing as double
+    return mx::array(nb::cast<double>(*pv), t.value_or(mx::float32));
   } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
     return mx::array(
         static_cast<mx::complex64_t>(*pv), t.value_or(mx::complex64));

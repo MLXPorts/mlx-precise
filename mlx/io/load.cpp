@@ -391,3 +391,209 @@ void ParallelFileReader::read(char* data, size_t n, size_t offset) {
 } // namespace io
 
 } // namespace mlx::core
+
+///////////////////////////////////////////////////////////////////////////////
+// NPZ (ZIP of NPY) writer — store-only (no compression)
+///////////////////////////////////////////////////////////////////////////////
+
+namespace mlx::core {
+namespace {
+
+struct ZipEntry {
+  std::string name;
+  uint32_t crc32;
+  uint32_t comp_size;
+  uint32_t uncomp_size;
+  uint32_t local_header_offset;
+};
+
+// Simple CRC32 (IEEE 802.3) implementation
+static uint32_t crc32_update(uint32_t crc, const unsigned char* buf, size_t len) {
+  static uint32_t table[256];
+  static bool init = false;
+  if (!init) {
+    for (uint32_t i = 0; i < 256; ++i) {
+      uint32_t c = i;
+      for (int j = 0; j < 8; ++j) {
+        c = (c & 1) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
+      }
+      table[i] = c;
+    }
+    init = true;
+  }
+  crc = crc ^ 0xFFFFFFFFu;
+  for (size_t i = 0; i < len; ++i) {
+    crc = table[(crc ^ buf[i]) & 0xFF] ^ (crc >> 8);
+  }
+  return crc ^ 0xFFFFFFFFu;
+}
+
+class MemoryWriter : public io::Writer {
+ public:
+  bool is_open() const override { return true; }
+  bool good() const override { return true; }
+  size_t tell() override { return buf_.size(); }
+  void seek(int64_t off, std::ios_base::seekdir way) override {
+    // Not supported; used only as sink for NPY serialization
+    if (off != 0 || way != std::ios_base::beg) {
+      throw std::runtime_error("MemoryWriter.seek not supported");
+    }
+  }
+  void write(const char* data, size_t n) override {
+    buf_.insert(buf_.end(), data, data + n);
+  }
+  std::string label() const override { return "memory buffer"; }
+  const std::vector<char>& data() const { return buf_; }
+
+ private:
+  std::vector<char> buf_;
+};
+
+// Little-endian write helpers
+inline void w16(std::vector<char>& out, uint16_t v) {
+  out.push_back((char)(v & 0xFF));
+  out.push_back((char)((v >> 8) & 0xFF));
+}
+inline void w32(std::vector<char>& out, uint32_t v) {
+  out.push_back((char)(v & 0xFF));
+  out.push_back((char)((v >> 8) & 0xFF));
+  out.push_back((char)((v >> 16) & 0xFF));
+  out.push_back((char)((v >> 24) & 0xFF));
+}
+
+void write_local_header(
+    io::Writer& out,
+    const ZipEntry& e,
+    std::vector<char>& scratch) {
+  scratch.clear();
+  // Local file header signature
+  w32(scratch, 0x04034B50u);
+  w16(scratch, 20);          // version needed
+  w16(scratch, 0);           // flags
+  w16(scratch, 0);           // method: 0 = store
+  w16(scratch, 0);           // time
+  w16(scratch, 0);           // date
+  w32(scratch, e.crc32);     // CRC-32
+  w32(scratch, e.comp_size); // compressed size
+  w32(scratch, e.uncomp_size); // uncompressed size
+  w16(scratch, (uint16_t)e.name.size()); // file name length
+  w16(scratch, 0);           // extra length
+  out.write(scratch.data(), scratch.size());
+  out.write(e.name.data(), e.name.size());
+}
+
+void write_central_header(
+    std::vector<char>& cd,
+    const ZipEntry& e) {
+  // Central dir file header signature
+  w32(cd, 0x02014B50u);
+  w16(cd, 20); // version made by
+  w16(cd, 20); // version needed
+  w16(cd, 0);  // flags
+  w16(cd, 0);  // method
+  w16(cd, 0);  // time
+  w16(cd, 0);  // date
+  w32(cd, e.crc32);
+  w32(cd, e.comp_size);
+  w32(cd, e.uncomp_size);
+  w16(cd, (uint16_t)e.name.size()); // file name length
+  w16(cd, 0);  // extra length
+  w16(cd, 0);  // comment length
+  w16(cd, 0);  // disk number start
+  w16(cd, 0);  // internal attrs
+  w32(cd, 0);  // external attrs
+  w32(cd, e.local_header_offset);
+  // filename
+  cd.insert(cd.end(), e.name.begin(), e.name.end());
+}
+
+void write_end_of_central(
+    io::Writer& out,
+    uint16_t nfiles,
+    uint32_t cd_size,
+    uint32_t cd_offset,
+    std::vector<char>& scratch) {
+  scratch.clear();
+  w32(scratch, 0x06054B50u);
+  w16(scratch, 0); // disk
+  w16(scratch, 0); // start disk
+  w16(scratch, nfiles);
+  w16(scratch, nfiles);
+  w32(scratch, cd_size);
+  w32(scratch, cd_offset);
+  w16(scratch, 0); // comment length
+  out.write(scratch.data(), scratch.size());
+}
+
+} // anonymous namespace
+
+void savez(
+    std::shared_ptr<io::Writer> out_stream,
+    const std::unordered_map<std::string, array>& arrays,
+    bool /*compressed*/) {
+  if (!out_stream || !out_stream->good() || !out_stream->is_open()) {
+    throw std::runtime_error("[savez] Output stream not open");
+  }
+
+  std::vector<ZipEntry> entries;
+  entries.reserve(arrays.size());
+
+  std::vector<char> scratch; // reused buffer for headers
+  std::vector<char> central_dir;
+
+  // Write each local header + data
+  for (const auto& [name, arr] : arrays) {
+    std::string fname = name;
+    if (fname.rfind(".npy") == std::string::npos) {
+      fname += ".npy";
+    }
+
+    // Serialize .npy into memory to compute crc/size
+    MemoryWriter mw;
+    {
+      array a = arr;
+      a.eval();
+      save(std::shared_ptr<io::Writer>(&mw, [](io::Writer*) {}), a);
+    }
+    const auto& data = mw.data();
+    uint32_t crc = crc32_update(0, (const unsigned char*)data.data(), data.size());
+
+    ZipEntry e;
+    e.name = fname;
+    e.crc32 = crc;
+    e.comp_size = (uint32_t)data.size();
+    e.uncomp_size = (uint32_t)data.size();
+    e.local_header_offset = (uint32_t)out_stream->tell();
+
+    write_local_header(*out_stream, e, scratch);
+    // file data
+    out_stream->write(data.data(), data.size());
+
+    entries.push_back(e);
+  }
+
+  // Build central directory in memory
+  uint32_t cd_offset = (uint32_t)out_stream->tell();
+  for (const auto& e : entries) {
+    write_central_header(central_dir, e);
+  }
+  // Write central directory
+  if (!central_dir.empty()) {
+    out_stream->write(central_dir.data(), central_dir.size());
+  }
+  uint32_t cd_size = (uint32_t)central_dir.size();
+  write_end_of_central(*out_stream, (uint16_t)entries.size(), cd_size, cd_offset, scratch);
+}
+
+void savez(
+    std::string file,
+    const std::unordered_map<std::string, array>& arrays,
+    bool compressed) {
+  // Add .npz extension if missing
+  if (file.length() < 4 || file.substr(file.length() - 4, 4) != ".npz")
+    file += ".npz";
+  auto writer = std::make_shared<io::FileWriter>(std::move(file));
+  savez(writer, arrays, compressed);
+}
+
+} // namespace mlx::core

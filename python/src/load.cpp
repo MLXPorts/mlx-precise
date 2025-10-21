@@ -447,25 +447,19 @@ void mlx_savez_helper(
     arrays_dict.insert({arr_name, arrays_list[i]});
   }
 
-  // Create python ZipFile object depending on compression
-  nb::module_ zipfile = nb::module_::import_("zipfile");
-  int compression = nb::cast<int>(
-      compressed ? zipfile.attr("ZIP_DEFLATED") : zipfile.attr("ZIP_STORED"));
-  char mode = 'w';
-  ZipFileWrapper zipfile_object(zipfile, file, mode, compression);
-
-  // Save each array
-  for (auto [k, a] : arrays_dict) {
-    std::string fname = k + ".npy";
-    auto py_ostream = zipfile_object.open(fname, 'w');
-    auto writer = std::make_shared<PyFileWriter>(py_ostream);
-    {
-      nb::gil_scoped_release nogil;
-      mx::save(writer, a);
-    }
+  // Use C++ core NPZ writer (store-only for now)
+  if (is_str_or_path(file)) {
+    auto file_str = nb::cast<std::string>(nb::str(file));
+    nb::gil_scoped_release nogil;
+    mx::savez(file_str, arrays_dict, /*compressed=*/compressed);
+    return;
+  } else if (is_ostream_object(file)) {
+    auto writer = std::make_shared<PyFileWriter>(file);
+    nb::gil_scoped_release nogil;
+    mx::savez(writer, arrays_dict, /*compressed=*/compressed);
+    return;
   }
-
-  return;
+  throw std::invalid_argument("[savez] Input must be a file-like object, or string");
 }
 
 void mlx_save_safetensor_helper(

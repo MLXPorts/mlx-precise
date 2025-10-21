@@ -53,9 +53,25 @@ void save_safetensors(
 
 GGUFLoad load_gguf(const std::string& file, StreamOrDevice s = {});
 
-void save_gguf(
+  void save_gguf(
+      std::string file,
+      std::unordered_map<std::string, array> array_map,
+      std::unordered_map<std::string, GGUFMetaData> meta_data = {});
+
+/** Save multiple arrays to a .npz archive (ZIP of .npy files).
+ *  If compressed is false, entries are stored (no compression).
+ *  If compressed is true, entries are currently stored as well (no zlib dependency).
+ *  The on-disk format matches NumPy's .npz expectations.
+ */
+void savez(
+    std::shared_ptr<io::Writer> out_stream,
+    const std::unordered_map<std::string, array>& arrays,
+    bool compressed = false);
+
+/** Save multiple arrays to a .npz archive by file path. */
+void savez(
     std::string file,
-    std::unordered_map<std::string, array> array_map,
-    std::unordered_map<std::string, GGUFMetaData> meta_data = {});
+    const std::unordered_map<std::string, array>& arrays,
+    bool compressed = false);
 
 } // namespace mlx::core

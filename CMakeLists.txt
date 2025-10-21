@@ -45,7 +45,6 @@ option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)
-option(MLX_USE_ZLIB "Enable zlib for NPZ compression" ON)
 
 # --------------------- Processor tests -------------------------
 message(
@@ -148,12 +147,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_libraries(mlx PRIVATE dl pthread)
 endif()
 
-if(MLX_USE_ZLIB)
-  find_package(ZLIB REQUIRED)
-  target_link_libraries(mlx PRIVATE ZLIB::ZLIB)
-  target_compile_definitions(mlx PRIVATE MLX_HAVE_ZLIB)
-  message(STATUS "Zlib found: enabling NPZ compression (required)")
-endif()
+# NPZ compression/decompression requires zlib (happy path only)
+find_package(ZLIB REQUIRED)
+target_link_libraries(mlx PRIVATE ZLIB::ZLIB)
+target_compile_definitions(mlx PRIVATE MLX_HAVE_ZLIB)
+message(STATUS "Zlib found: NPZ deflate/inflate enabled")
 
 if(WIN32)
   if(MSVC)

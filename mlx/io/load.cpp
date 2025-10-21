@@ -17,6 +17,9 @@
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
+#ifdef MLX_HAVE_ZLIB
+#include <zlib.h>
+#endif
 
 // Adapted from
 // https://github.com/angeloskath/supervised-lda/blob/master/include/ldaplusplus/NumpyFormat.hpp
@@ -567,7 +570,6 @@ void savez(
     e.local_header_offset = (uint32_t)out_stream->tell();
 
     uint16_t method = 0;
-#ifdef MLX_HAVE_ZLIB
     if (compressed) {
       uLongf dest_len = compressBound((uLongf)data.size());
       std::vector<unsigned char> zbuf(dest_len);
@@ -579,11 +581,6 @@ void savez(
       write_local_header(*out_stream, e, method, scratch);
       out_stream->write((const char*)zbuf.data(), zbuf.size());
     } else
-#else
-    if (compressed) {
-      throw std::runtime_error("[savez] built without zlib; compressed=True not supported");
-    } else
-#endif
     {
       e.comp_size = (uint32_t)data.size();
       method = 0;
@@ -616,7 +613,6 @@ void savez(
   if (file.length() < 4 || file.substr(file.length() - 4, 4) != ".npz")
     file += ".npz";
   auto writer = std::make_shared<io::FileWriter>(std::move(file));
-#ifdef MLX_HAVE_ZLIB
   if (compressed) {
     // Compress each entry with DEFLATE
     if (!writer || !writer->good() || !writer->is_open()) {
@@ -657,7 +653,6 @@ void savez(
     write_end_of_central(*writer, (uint16_t)entries.size(), cd_size, cd_offset, scratch);
     return;
   }
-#endif
   savez(writer, arrays, /*compressed=*/false);
 }
 

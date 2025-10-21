@@ -14,9 +14,7 @@
 #include "python/src/load.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
-#ifdef MLX_HAVE_ZLIB
 #include <zlib.h>
-#endif
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
@@ -287,11 +285,6 @@ std::unordered_map<std::string, mx::array> mlx_load_npz_helper(
     if (method != 0 && method != 8) {
       throw std::runtime_error("[load_npz] Unsupported ZIP method");
     }
-#ifndef MLX_HAVE_ZLIB
-    if (method == 8) {
-      throw std::runtime_error("[load_npz] built without zlib; cannot read deflated entries");
-    }
-#endif
     // Read local header
     if (rd32(lhoff) != 0x04034B50u) throw std::runtime_error("[load_npz] Bad LOC sig");
     uint16_t nlen2 = rd16(lhoff + 26);

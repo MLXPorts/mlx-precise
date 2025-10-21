@@ -464,13 +464,14 @@ inline void w32(std::vector<char>& out, uint32_t v) {
 void write_local_header(
     io::Writer& out,
     const ZipEntry& e,
+    uint16_t method,
     std::vector<char>& scratch) {
   scratch.clear();
   // Local file header signature
   w32(scratch, 0x04034B50u);
   w16(scratch, 20);          // version needed
   w16(scratch, 0);           // flags
-  w16(scratch, 0);           // method: 0 = store
+  w16(scratch, method);      // method: 0 = store, 8 = deflate
   w16(scratch, 0);           // time
   w16(scratch, 0);           // date
   w32(scratch, e.crc32);     // CRC-32
@@ -484,13 +485,14 @@ void write_local_header(
 
 void write_central_header(
     std::vector<char>& cd,
-    const ZipEntry& e) {
+    const ZipEntry& e,
+    uint16_t method) {
   // Central dir file header signature
   w32(cd, 0x02014B50u);
   w16(cd, 20); // version made by
   w16(cd, 20); // version needed
   w16(cd, 0);  // flags
-  w16(cd, 0);  // method
+  w16(cd, method);  // method
   w16(cd, 0);  // time
   w16(cd, 0);  // date
   w32(cd, e.crc32);
@@ -565,8 +567,14 @@ void savez(
     e.uncomp_size = (uint32_t)data.size();
     e.local_header_offset = (uint32_t)out_stream->tell();
 
-    write_local_header(*out_stream, e, scratch);
-    // file data
+    uint16_t method = 0;
+#ifdef MLX_HAVE_ZLIB
+    std::vector<unsigned char> zbuf;
+    if (/*compressed requested? not available here*/ false) {}
+#endif
+    // Writer always gets called with chosen compression mode at higher level;
+    // do store here, compressed variant handled in wrapper below.
+    write_local_header(*out_stream, e, /*method=*/0, scratch);
     out_stream->write(data.data(), data.size());
 
     entries.push_back(e);
@@ -575,7 +583,7 @@ void savez(
   // Build central directory in memory
   uint32_t cd_offset = (uint32_t)out_stream->tell();
   for (const auto& e : entries) {
-    write_central_header(central_dir, e);
+    write_central_header(central_dir, e, /*method=*/0);
   }
   // Write central directory
   if (!central_dir.empty()) {
@@ -593,7 +601,49 @@ void savez(
   if (file.length() < 4 || file.substr(file.length() - 4, 4) != ".npz")
     file += ".npz";
   auto writer = std::make_shared<io::FileWriter>(std::move(file));
-  savez(writer, arrays, compressed);
+#ifdef MLX_HAVE_ZLIB
+  if (compressed) {
+    // Compress each entry with DEFLATE
+    if (!writer || !writer->good() || !writer->is_open()) {
+      throw std::runtime_error("[savez] Output stream not open");
+    }
+    std::vector<ZipEntry> entries;
+    entries.reserve(arrays.size());
+    std::vector<char> scratch;
+    std::vector<char> central_dir;
+    for (const auto& [name, arr] : arrays) {
+      std::string fname = name;
+      if (fname.rfind(".npy") == std::string::npos) fname += ".npy";
+      MemoryWriter mw;
+      array a = arr; a.eval();
+      save(std::shared_ptr<io::Writer>(&mw, [](io::Writer*) {}), a);
+      const auto& data = mw.data();
+      uint32_t crc = crc32_update(0, (const unsigned char*)data.data(), data.size());
+      // Compress using zlib (deflate)
+      uLongf dest_len = compressBound((uLongf)data.size());
+      std::vector<unsigned char> zbuf(dest_len);
+      int zrc = compress2(zbuf.data(), &dest_len, (const Bytef*)data.data(), (uLongf)data.size(), Z_BEST_SPEED);
+      if (zrc != Z_OK) throw std::runtime_error("[savez] zlib compress failed");
+      zbuf.resize(dest_len);
+      ZipEntry e;
+      e.name = fname;
+      e.crc32 = crc;
+      e.comp_size = (uint32_t)zbuf.size();
+      e.uncomp_size = (uint32_t)data.size();
+      e.local_header_offset = (uint32_t)writer->tell();
+      write_local_header(*writer, e, /*method=*/8, scratch);
+      writer->write((const char*)zbuf.data(), zbuf.size());
+      entries.push_back(e);
+    }
+    uint32_t cd_offset = (uint32_t)writer->tell();
+    for (const auto& e : entries) write_central_header(central_dir, e, /*method=*/8);
+    if (!central_dir.empty()) writer->write(central_dir.data(), central_dir.size());
+    uint32_t cd_size = (uint32_t)central_dir.size();
+    write_end_of_central(*writer, (uint16_t)entries.size(), cd_size, cd_offset, scratch);
+    return;
+  }
+#endif
+  savez(writer, arrays, /*compressed=*/false);
 }
 
 } // namespace mlx::core

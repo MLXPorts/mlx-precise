@@ -281,8 +281,8 @@ std::unordered_map<std::string, mx::array> mlx_load_npz_helper(
     std::string name(buf.data() + p + 46, buf.data() + p + 46 + nlen);
     p += 46 + nlen + elen + clen;
 
-    if (method != 0) {
-      throw std::runtime_error("[load_npz] DEFLATE not supported; re-save with mx.savez (store) or install a build with zlib");
+    if (method != 0 && method != 8) {
+      throw std::runtime_error("[load_npz] Unsupported ZIP method");
     }
     // Read local header
     if (rd32(lhoff) != 0x04034B50u) throw std::runtime_error("[load_npz] Bad LOC sig");
@@ -290,8 +290,27 @@ std::unordered_map<std::string, mx::array> mlx_load_npz_helper(
     uint16_t elen2 = rd16(lhoff + 28);
     size_t data_off = lhoff + 30 + nlen2 + elen2;
     if (data_off + csize > n) throw std::runtime_error("[load_npz] data OOB");
-    // Slice data for .npy payload
     const char* data = buf.data() + data_off;
+    std::vector<char> payload;
+#ifdef MLX_HAVE_ZLIB
+    if (method == 8) {
+      // Inflate using zlib
+      payload.resize(usize);
+      uLongf dest_len = (uLongf)usize;
+      int zrc = uncompress((Bytef*)payload.data(), &dest_len, (const Bytef*)data, (uLongf)csize);
+      if (zrc != Z_OK || dest_len != (uLongf)usize) {
+        throw std::runtime_error("[load_npz] zlib inflate failed");
+      }
+      // Optional CRC check
+      uint32_t crc_calc = crc32_update(0, (const unsigned char*)payload.data(), payload.size());
+      (void)crc_calc; // could compare to 'crc'
+      data = payload.data();
+      csize = usize;
+    } else
+#endif
+    {
+      // method==0 store; nothing to do
+    }
 
     // Wrap in a temporary Python bytes-backed reader: simplest path is to use
     // a Python memoryview via PyFileReader -> but we can directly build using

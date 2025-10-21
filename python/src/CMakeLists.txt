@@ -60,3 +60,14 @@ if(BUILD_SHARED_LIBS)
     target_link_options(core PRIVATE -Wl,-rpath,\$ORIGIN/lib)
   endif()
 endif()
+
+# Ensure the Python package contains the native library so @loader_path/lib resolves
+add_custom_command(
+  TARGET core POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory
+          ${MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY}/lib
+  COMMAND ${CMAKE_COMMAND} -E copy
+          $<TARGET_FILE:mlx>
+          ${MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY}/lib/$<TARGET_FILE_NAME:mlx>
+  COMMENT "Copying libmlx into Python package lib/ for wheel packaging"
+)

@@ -233,7 +233,7 @@ if __name__ == "__main__":
         },
     )
 
-    package_data = {"mlx.core": ["*.pyi"]}
+    package_data = {"mlx.core": ["*.pyi"], "mlx": ["lib/*"]}
 
     extras = {
         "dev": [

@@ -23,9 +23,7 @@ struct ndarray_traits<mx::float16_t> {
   static constexpr bool is_int = false;
   static constexpr bool is_signed = true;
 };
-
-static constexpr dlpack::dtype bfloat16{4, 16, 1};
-}; // namespace nanobind
+} // namespace nanobind
 
 int check_shape_dim(int64_t dim) {
   if (dim > std::numeric_limits<int>::max()) {

@@ -208,47 +208,125 @@ mx::GGUFLoad mlx_load_gguf_helper(nb::object file, mx::StreamOrDevice s) {
   throw std::invalid_argument("[load_gguf] Input must be a string");
 }
 
+// Minimal NPZ reader (store-only). If any entry is compressed (method=8), raise.
 std::unordered_map<std::string, mx::array> mlx_load_npz_helper(
     nb::object file,
     mx::StreamOrDevice s) {
-  bool own_file = is_str_or_path(file);
+  auto read_all = [&](nb::object f) -> std::vector<char> {
+    // Use Python file API to read all bytes
+    auto st_pos = f.attr("tell")();
+    f.attr("seek")(0, 2);
+    size_t size = nb::cast<size_t>(f.attr("tell")());
+    f.attr("seek")(0, 0);
+    nb::bytes b = nb::cast<nb::bytes>(f.attr("read")(size));
+    // restore
+    f.attr("seek")(st_pos, 0);
+    return std::vector<char>(b.c_str(), b.c_str() + PyBytes_GET_SIZE(b.ptr()));
+  };
 
-  nb::module_ zipfile = nb::module_::import_("zipfile");
-  if (!is_zip_file(zipfile, file)) {
-    throw std::invalid_argument(
-        "[load_npz] Input must be a zip file or a file-like object that can be "
-        "opened with zipfile.ZipFile");
-  }
-  // Output dictionary filename in zip -> loaded array
-  std::unordered_map<std::string, mx::array> array_dict;
-
-  // Create python ZipFile object
-  ZipFileWrapper zipfile_object(zipfile, file);
-  for (const std::string& st : zipfile_object.namelist()) {
-    // Open zip file as a python file stream
-    nb::object sub_file = zipfile_object.open(st);
-
-    // Create array from python file stream
-    auto arr = mx::load(std::make_shared<PyFileReader>(sub_file), s);
-
-    // Remove .npy from file if it is there
-    auto key = st;
-    if (st.length() > 4 && st.substr(st.length() - 4, 4) == ".npy")
-      key = st.substr(0, st.length() - 4);
-
-    // Add array to dict
-    array_dict.insert({key, arr});
+  std::vector<char> buf;
+  if (is_str_or_path(file)) {
+    std::ifstream ifs(nb::cast<std::string>(nb::str(file)), std::ios::binary);
+    if (!ifs) throw std::runtime_error("[load_npz] failed to open file");
+    ifs.seekg(0, std::ios::end);
+    size_t size = (size_t)ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+    buf.resize(size);
+    ifs.read(buf.data(), size);
+  } else if (is_istream_object(file)) {
+    buf = read_all(file);
+  } else {
+    throw std::invalid_argument("[load_npz] Input must be a file-like object, or string");
   }
 
-  // If we don't own the stream and it was passed to us, eval immediately
-  if (!own_file) {
-    nb::gil_scoped_release gil;
-    for (auto& [key, arr] : array_dict) {
-      arr.eval();
+  auto rd32 = [&](size_t off) -> uint32_t {
+    const unsigned char* p = (const unsigned char*)buf.data() + off;
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
+  };
+  auto rd16 = [&](size_t off) -> uint16_t {
+    const unsigned char* p = (const unsigned char*)buf.data() + off;
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+  };
+
+  // Find EOCD signature 0x06054b50 scanning last 64KB
+  size_t n = buf.size();
+  size_t start = (n > 66000 ? n - 66000 : 0);
+  size_t eocd = n;
+  for (size_t i = n >= 22 ? n - 22 : 0; i-- > start;) {
+    if (rd32(i) == 0x06054B50u) { eocd = i; break; }
+  }
+  if (eocd == n) {
+    throw std::runtime_error("[load_npz] EOCD not found; not a ZIP file");
+  }
+  uint16_t total_entries = rd16(eocd + 10);
+  uint32_t cd_size = rd32(eocd + 12);
+  uint32_t cd_offset = rd32(eocd + 16);
+  if (cd_offset + cd_size > n) {
+    throw std::runtime_error("[load_npz] Central directory out of bounds");
+  }
+
+  std::unordered_map<std::string, mx::array> out;
+  size_t p = cd_offset;
+  for (uint16_t i = 0; i < total_entries; ++i) {
+    if (rd32(p) != 0x02014B50u) throw std::runtime_error("[load_npz] Bad CEN sig");
+    uint16_t method = rd16(p + 10);
+    uint32_t crc = rd32(p + 16);
+    uint32_t csize = rd32(p + 20);
+    uint32_t usize = rd32(p + 24);
+    uint16_t nlen = rd16(p + 28);
+    uint16_t elen = rd16(p + 30);
+    uint16_t clen = rd16(p + 32);
+    uint32_t lhoff = rd32(p + 42);
+    std::string name(buf.data() + p + 46, buf.data() + p + 46 + nlen);
+    p += 46 + nlen + elen + clen;
+
+    if (method != 0) {
+      throw std::runtime_error("[load_npz] DEFLATE not supported; re-save with mx.savez (store) or install a build with zlib");
     }
+    // Read local header
+    if (rd32(lhoff) != 0x04034B50u) throw std::runtime_error("[load_npz] Bad LOC sig");
+    uint16_t nlen2 = rd16(lhoff + 26);
+    uint16_t elen2 = rd16(lhoff + 28);
+    size_t data_off = lhoff + 30 + nlen2 + elen2;
+    if (data_off + csize > n) throw std::runtime_error("[load_npz] data OOB");
+    // Slice data for .npy payload
+    const char* data = buf.data() + data_off;
+
+    // Wrap in a temporary Python bytes-backed reader: simplest path is to use
+    // a Python memoryview via PyFileReader -> but we can directly build using
+    // the existing core .npy loader by creating a temporary Reader over memory.
+    class MemReader : public mx::io::Reader {
+     public:
+      MemReader(const char* d, size_t n) : d_(d), n_(n), pos_(0) {}
+      bool is_open() const override { return true; }
+      bool good() const override { return true; }
+      size_t tell() override { return pos_; }
+      void seek(int64_t off, std::ios_base::seekdir way) override {
+        if (way == std::ios_base::beg) pos_ = (size_t)off; else pos_ += off;
+      }
+      void read(char* out, size_t n) override {
+        if (pos_ + n > n_) throw std::runtime_error("[npz] read OOB");
+        std::memcpy(out, d_ + pos_, n); pos_ += n;
+      }
+      void read(char* out, size_t n, size_t off) override {
+        if (off + n > n_) throw std::runtime_error("[npz] read OOB");
+        std::memcpy(out, d_ + off, n);
+      }
+      std::string label() const override { return "npz memory"; }
+     private:
+      const char* d_;
+      size_t n_;
+      size_t pos_;
+    } mr(data, csize);
+
+    auto arr = mx::load(std::make_shared<MemReader>(mr), s);
+    std::string key = name;
+    if (key.size() > 4 && key.substr(key.size()-4) == ".npy") key.resize(key.size()-4);
+    out.emplace(std::move(key), std::move(arr));
   }
 
-  return array_dict;
+  return out;
 }
 
 mx::array mlx_load_npy_helper(nb::object file, mx::StreamOrDevice s) {

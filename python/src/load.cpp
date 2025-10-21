@@ -254,8 +254,13 @@ std::unordered_map<std::string, mx::array> mlx_load_npz_helper(
   size_t n = buf.size();
   size_t start = (n > 66000 ? n - 66000 : 0);
   size_t eocd = n;
-  for (size_t i = n >= 22 ? n - 22 : 0; i-- > start;) {
-    if (rd32(i) == 0x06054B50u) { eocd = i; break; }
+  if (n >= 22) {
+    size_t i = n - 22;
+    for (;;) {
+      if (rd32(i) == 0x06054B50u) { eocd = i; break; }
+      if (i == start) break;
+      --i;
+    }
   }
   if (eocd == n) {
     throw std::runtime_error("[load_npz] EOCD not found; not a ZIP file");

@@ -1,4 +1,4 @@
-# MLX
+# MLX (precise fork)
 
 [**Quickstart**](#quickstart) | [**Installation**](#installation) |
 [**Documentation**](https://ml-explore.github.io/mlx/build/html/index.html) |
@@ -6,8 +6,15 @@
 
 [![CircleCI](https://circleci.com/gh/ml-explore/mlx.svg?style=svg)](https://circleci.com/gh/ml-explore/mlx)
 
-MLX is an array framework for machine learning on Apple silicon,
-brought to you by Apple machine learning research.
+This fork tracks upstream MLX and adds precision fixes:
+
+- True double‑precision math on CPU paths (e.g., exp underflows correctly).
+- Preserve Python float64 scalars without silent downcast.
+
+Branch/Tag strategy
+
+- `main` tracks upstream 0.29.x with precision patches. Tag releases as `v0.29.4-precise` etc.
+- Supports Python 3.14 free‑threaded (cp314t) builds.
 
 Some key features of MLX include:
 
@@ -68,11 +75,11 @@ in the documentation.
 
 ## Installation
 
-MLX is available on [PyPI](https://pypi.org/project/mlx/). To install MLX on
-macOS, run:
+Install this fork from Git (recommended for precision fixes):
 
 ```bash
-pip install mlx
+python -m pip install -U --no-build-isolation \
+  "git+https://github.com/SolaceHarmony/mlx-precise@main"
 ```
 
 To install the CUDA backend on Linux, run:
@@ -87,9 +94,12 @@ To install a CPU-only Linux package, run:
 pip install mlx[cpu]
 ```
 
-Checkout the
-[documentation](https://ml-explore.github.io/mlx/build/html/install.html#)
-for more information on building the C++ and Python APIs from source.
+Conda packaging (optional):
+
+```bash
+conda build -c conda-forge conda/recipe
+anaconda upload -u <your-channel> <built .conda>
+```
 
 ## Contributing
 
@@ -98,10 +108,7 @@ on contributing to MLX. See the
 [docs](https://ml-explore.github.io/mlx/build/html/install.html) for more
 information on building from source, and running tests.
 
-We are grateful for all of [our
-contributors](https://github.com/ml-explore/mlx/tree/main/ACKNOWLEDGMENTS.md#Individual-Contributors). If you contribute
-to MLX and wish to be acknowledged, please add your name to the list in your
-pull request.
+For original acknowledgments and citation, see upstream MLX.
 
 ## Citing MLX
 

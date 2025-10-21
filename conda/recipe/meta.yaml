@@ -1,0 +1,38 @@
+{% set name = "mlx" %}
+{% set version = "0.29.4" %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+  path: ../..
+
+build:
+  number: 0
+  string: precise_0
+  script: {{ PYTHON }} -m pip install . -vv --no-build-isolation
+
+requirements:
+  host:
+    - python >=3.10
+    - pip
+    - cmake
+    - ninja
+  run:
+    - python >=3.10
+
+test:
+  imports:
+    - mlx.core
+  commands:
+    - python - <<'PY'
+import mlx.core as mx
+mx.set_default_device(mx.cpu)
+print('exp(-100) f64:', mx.exp(mx.array([-100.0], dtype=mx.float64))[0].item())
+PY
+
+about:
+  home: https://github.com/SolaceHarmony/mlx-precise
+  license: Apache-2.0
+  summary: "MLX (precise fork): CPU float64 fixes + dtype handling improvements"

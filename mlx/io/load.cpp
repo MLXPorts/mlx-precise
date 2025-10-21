@@ -532,7 +532,7 @@ void write_end_of_central(
 void savez(
     std::shared_ptr<io::Writer> out_stream,
     const std::unordered_map<std::string, array>& arrays,
-    bool /*compressed*/) {
+    bool compressed) {
   if (!out_stream || !out_stream->good() || !out_stream->is_open()) {
     throw std::runtime_error("[savez] Output stream not open");
   }
@@ -563,19 +563,33 @@ void savez(
     ZipEntry e;
     e.name = fname;
     e.crc32 = crc;
-    e.comp_size = (uint32_t)data.size();
     e.uncomp_size = (uint32_t)data.size();
     e.local_header_offset = (uint32_t)out_stream->tell();
 
     uint16_t method = 0;
 #ifdef MLX_HAVE_ZLIB
-    std::vector<unsigned char> zbuf;
-    if (/*compressed requested? not available here*/ false) {}
+    if (compressed) {
+      uLongf dest_len = compressBound((uLongf)data.size());
+      std::vector<unsigned char> zbuf(dest_len);
+      int zrc = compress2(zbuf.data(), &dest_len, (const Bytef*)data.data(), (uLongf)data.size(), Z_BEST_SPEED);
+      if (zrc != Z_OK) throw std::runtime_error("[savez] zlib compress failed");
+      zbuf.resize(dest_len);
+      e.comp_size = (uint32_t)zbuf.size();
+      method = 8;
+      write_local_header(*out_stream, e, method, scratch);
+      out_stream->write((const char*)zbuf.data(), zbuf.size());
+    } else
+#else
+    if (compressed) {
+      throw std::runtime_error("[savez] built without zlib; compressed=True not supported");
+    } else
 #endif
-    // Writer always gets called with chosen compression mode at higher level;
-    // do store here, compressed variant handled in wrapper below.
-    write_local_header(*out_stream, e, /*method=*/0, scratch);
-    out_stream->write(data.data(), data.size());
+    {
+      e.comp_size = (uint32_t)data.size();
+      method = 0;
+      write_local_header(*out_stream, e, method, scratch);
+      out_stream->write(data.data(), data.size());
+    }
 
     entries.push_back(e);
   }
@@ -583,7 +597,8 @@ void savez(
   // Build central directory in memory
   uint32_t cd_offset = (uint32_t)out_stream->tell();
   for (const auto& e : entries) {
-    write_central_header(central_dir, e, /*method=*/0);
+    uint16_t method = (e.comp_size != e.uncomp_size) ? 8 : 0;
+    write_central_header(central_dir, e, method);
   }
   // Write central directory
   if (!central_dir.empty()) {

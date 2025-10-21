@@ -75,6 +75,12 @@ in the documentation.
 
 ## Installation
 
+Requirements
+------------
+- Python 3.14 free‑threaded ONLY (cp314t). Other Python versions/builds are not supported.
+- Non‑GIL runtime: this build declares free‑threaded safety and is intended to run with the GIL disabled.
+  Use the 3.14 interpreter in non‑GIL mode (e.g., `python -X gil=0 ...`).
+
 Install this fork from Git (recommended for precision fixes):
 
 ```bash
@@ -100,6 +106,11 @@ Conda packaging (optional):
 conda build -c conda-forge conda/recipe
 anaconda upload -u <your-channel> <built .conda>
 ```
+
+Notes
+-----
+- This fork targets macOS/Metal primarily. The Python 3.14 free‑threaded build is required; earlier Python versions or GIL builds are out of scope.
+- Wheels bundle the native Metal payload and libmlx.dylib inside the Python package; no environment variables are required for import.
 
 ## Contributing
 

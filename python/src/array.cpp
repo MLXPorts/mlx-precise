@@ -469,34 +469,78 @@ void init_array(nb::module_& m) {
       .def(
           "__getstate__",
           [](const mx::array& a) {
-            auto nd = (a.dtype() == mx::bfloat16)
-                ? mlx_to_np_array(mx::view(a, mx::uint16))
-                : mlx_to_np_array(a);
-            return nb::make_tuple(nd, static_cast<uint8_t>(a.dtype().val()));
+            // NumPy-free pickle state: (bytes_view, shape, dtype_val, order)
+            // Ensure host evaluation
+            {
+              nb::gil_scoped_release nogil;
+              a.eval();
+            }
+            auto order = a.flags().col_contiguous ? 'F' : 'C';
+            // Expose a read-only memoryview to avoid extra copy where possible
+            nb::object mv = nb::memoryview(nb::bytes(a.data<char>(), a.nbytes()));
+            nb::tuple shape = nb::steal<nb::tuple>(PyTuple_New(a.ndim()));
+            for (int i = 0; i < a.ndim(); ++i) {
+              PyTuple_SET_ITEM(shape.ptr(), i, nb::int_(a.shape(i)).release().ptr());
+            }
+            return nb::make_tuple(
+                mv,
+                shape,
+                static_cast<uint8_t>(a.dtype().val()),
+                nb::cast(order));
           })
       .def(
           "__setstate__",
           [](mx::array& arr, const nb::tuple& state) {
-            if (nb::len(state) != 2) {
+            // Accept both legacy (ndarray, dtype_val) and new
+            // (bytes/memoryview, shape tuple, dtype_val, order) formats.
+            if (nb::len(state) == 2) {
+              using ND = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
+              ND nd = nb::cast<ND>(state[0]);
+              auto val = static_cast<mx::Dtype::Val>(nb::cast<uint8_t>(state[1]));
+              if (val == mx::Dtype::Val::bfloat16) {
+                auto owner = nb::handle(state[0].ptr());
+                new (&arr) mx::array(nd_array_to_mlx(
+                    ND(nd.data(),
+                       nd.ndim(),
+                       reinterpret_cast<const size_t*>(nd.shape_ptr()),
+                       owner,
+                       nullptr,
+                       nb::bfloat16),
+                    mx::bfloat16));
+              } else {
+                new (&arr) mx::array(nd_array_to_mlx(nd, std::nullopt));
+              }
+              return;
+            }
+
+            if (nb::len(state) != 4) {
               throw std::invalid_argument(
-                  "Invalid pickle state: expected (ndarray, Dtype::Val)");
+                  "Invalid pickle state: expected (bytes_view, shape, dtype_val, order)");
             }
-            using ND = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
-            ND nd = nb::cast<ND>(state[0]);
-            auto val = static_cast<mx::Dtype::Val>(nb::cast<uint8_t>(state[1]));
-            if (val == mx::Dtype::Val::bfloat16) {
-              auto owner = nb::handle(state[0].ptr());
-              new (&arr) mx::array(nd_array_to_mlx(
-                  ND(nd.data(),
-                     nd.ndim(),
-                     reinterpret_cast<const size_t*>(nd.shape_ptr()),
-                     owner,
-                     nullptr,
-                     nb::bfloat16),
-                  mx::bfloat16));
-            } else {
-              new (&arr) mx::array(nd_array_to_mlx(nd, std::nullopt));
+            auto buf_obj = state[0];
+            auto shape_t = nb::cast<nb::tuple>(state[1]);
+            auto val = static_cast<mx::Dtype::Val>(nb::cast<uint8_t>(state[2]));
+            char order = nb::cast<char>(state[3]);
+
+            // Extract raw bytes
+            nb::bytes b = nb::cast<nb::bytes>(buf_obj);
+            const char* data = b.c_str();
+            size_t nbytes = (size_t)PyBytes_GET_SIZE(b.ptr());
+
+            // Build shape
+            mx::Shape shape;
+            shape.reserve(nb::len(shape_t));
+            for (size_t i = 0; i < (size_t)nb::len(shape_t); ++i) {
+              shape.push_back(nb::cast<int>(shape_t[i]));
             }
+
+            mx::Dtype dtype(val);
+            // Construct array and transpose if Fortran order
+            mx::array tmp(data, shape, dtype);
+            if (order == 'F') {
+              tmp = mx::transpose(tmp);
+            }
+            new (&arr) mx::array(std::move(tmp));
           })
       .def("__dlpack__", [](const mx::array& a) { return mlx_to_dlpack(a); })
       .def(

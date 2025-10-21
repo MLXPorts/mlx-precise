@@ -32,12 +32,10 @@ mx::array to_array(
   } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
     auto out_t = dtype.value_or(mx::float32);
     auto chosen = mx::issubdtype(out_t, mx::floating) ? out_t : mx::float32;
-    // Preserve Python float precision: build a 1-element NumPy array (double)
-    // and use the ndarray conversion path which honors dtype precisely.
-    nb::object np = nb::module_::import_("numpy");
-    nb::object arr = np.attr("array")(nb::make_tuple(nb::cast<double>(*pv)), nb::arg("dtype") = np.attr("float64"));
-    auto nd = nb::cast<nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>>(arr);
-    return nd_array_to_mlx(nd, chosen);
+    // Preserve Python float precision without NumPy: read as double and cast
+    // to the desired MLX dtype directly.
+    double dv = nb::cast<double>(*pv);
+    return mx::array(dv, chosen);
   } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
     return mx::array(static_cast<mx::complex64_t>(*pv), mx::complex64);
   } else if (auto pv = std::get_if<mx::array>(&v); pv) {

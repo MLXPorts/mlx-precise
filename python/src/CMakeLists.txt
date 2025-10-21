@@ -1,6 +1,7 @@
 nanobind_add_module(
   core
   NB_STATIC
+  FREE_THREADED
   STABLE_ABI
   LTO
   NOMINSIZE

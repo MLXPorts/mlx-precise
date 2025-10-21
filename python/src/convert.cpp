@@ -160,7 +160,16 @@ nb::ndarray<NDParams...> mlx_to_nd_array(const mx::array& a) {
 }
 
 nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a) {
-  return mlx_to_nd_array<nb::numpy>(a);
+  // Hard guard: disallow MLX→NumPy conversion in this fork.
+  // Guidance: keep computation in MLX; if you need double precision,
+  // switch to a CPU stream/device. For interop, prefer DLPack.
+  throw nb::type_error(
+      "MLX→NumPy conversion is disabled in mlx-precise.\n"
+      "Keep computation in MLX. If you require float64 or host ops, set the\n"
+      "default device/stream to CPU (e.g., mx.set_default_device(mx.cpu) or\n"
+      "with mx.default_device(mx.cpu): ...) and continue using MLX.\n"
+      "For framework interop, use __dlpack__/__dlpack_device__.\n"
+      "If you must materialize small data on host, use a.tolist().");
 }
 
 nb::ndarray<> mlx_to_dlpack(const mx::array& a) {

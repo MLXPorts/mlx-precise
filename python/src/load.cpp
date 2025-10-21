@@ -301,9 +301,6 @@ std::unordered_map<std::string, mx::array> mlx_load_npz_helper(
       if (zrc != Z_OK || dest_len != (uLongf)usize) {
         throw std::runtime_error("[load_npz] zlib inflate failed");
       }
-      // Optional CRC check
-      uint32_t crc_calc = crc32_update(0, (const unsigned char*)payload.data(), payload.size());
-      (void)crc_calc; // could compare to 'crc'
       data = payload.data();
       csize = usize;
     } else

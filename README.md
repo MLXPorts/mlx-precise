@@ -1,4 +1,4 @@
-# MLX (precise fork)
+# MLX-Precise: True Double-Precision + Python 3.14 Free-Threading
 
 [**Quickstart**](#quickstart) | [**Installation**](#installation) |
 [**Documentation**](https://ml-explore.github.io/mlx/build/html/index.html) |
@@ -6,15 +6,36 @@
 
 [![CircleCI](https://circleci.com/gh/ml-explore/mlx.svg?style=svg)](https://circleci.com/gh/ml-explore/mlx)
 
-This fork tracks upstream MLX and adds precision fixes:
+> **This fork adds true double-precision math and Python 3.14 free-threading support to MLX.**
 
-- True double‑precision math on CPU paths (e.g., exp underflows correctly).
-- Preserve Python float64 scalars without silent downcast.
+**Key Enhancements:**
+- **True Double-Precision:** Correct exp underflows on CPU paths (no silent float32 downcasts)
+- **Python 3.14 Free-Threading:** Full GIL-free operation support (cp314t builds)
+- **NumPy-Compatible API:** Drop-in replacement for NumPy in MLX workflows
+- **Part of MLX Ecosystem:** Used by [exo-mlx](https://github.com/SolaceHarmony/exo-mlx) and [opencv-mlx](https://github.com/SolaceHarmony/opencv-mlx)
 
-Branch/Tag strategy
+**Requirements:**
+- **Python 3.14 or later** (recommended for free-threading)
+- **Apple Silicon Mac** (M1/M2/M3/M4)
+- **macOS 11.0+**
 
-- `main` tracks upstream 0.29.x with precision patches. Tag releases as `v0.29.4-precise` etc.
-- Supports Python 3.14 free‑threaded (cp314t) builds.
+**Installation:**
+```bash
+# Requires Python 3.14 free-threading build
+python --version  # Should show Python 3.14.0 or later
+
+# Install from git
+pip install git+https://github.com/SolaceHarmony/mlx-precise@main
+
+# Or as a dependency in your project
+# mlx @ git+https://github.com/SolaceHarmony/mlx-precise@main
+```
+
+**Branch Strategy:**
+- `main`: Tracks upstream MLX 0.29.x with precision patches + Python 3.14t support
+- Version: `0.29.99.dev` (upstream-based with custom enhancements)
+
+**Upstream:** Based on [MLX v0.29.x](https://github.com/ml-explore/mlx/tree/v0.29.0)
 
 Some key features of MLX include:
 

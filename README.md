@@ -12,7 +12,7 @@
 - **True Double-Precision:** Correct exp underflows on CPU paths (no silent float32 downcasts)
 - **Python 3.14 Free-Threading:** Full GIL-free operation support (cp314t builds)
 - **NumPy-Compatible API:** Drop-in replacement for NumPy in MLX workflows
-- **Part of MLX Ecosystem:** Used by [exo-mlx](https://github.com/SolaceHarmony/exo-mlx) and [opencv-mlx](https://github.com/SolaceHarmony/opencv-mlx)
+- **Part of MLX Ecosystem:** Used by [exo-mlx](https://github.com/MLXPorts/exo-mlx) and [opencv-mlx](https://github.com/MLXPorts/opencv-mlx)
 
 **Requirements:**
 - **Python 3.14 or later** (recommended for free-threading)
@@ -25,10 +25,10 @@
 python --version  # Should show Python 3.14.0 or later
 
 # Install from git
-pip install git+https://github.com/SolaceHarmony/mlx-precise@main
+pip install git+https://github.com/MLXPorts/mlx-precise@main
 
 # Or as a dependency in your project
-# mlx @ git+https://github.com/SolaceHarmony/mlx-precise@main
+# mlx @ git+https://github.com/MLXPorts/mlx-precise@main
 ```
 
 **Branch Strategy:**
@@ -106,7 +106,7 @@ Install this fork from Git (recommended for precision fixes):
 
 ```bash
 python -m pip install -U --no-build-isolation \
-  "git+https://github.com/SolaceHarmony/mlx-precise@main"
+  "git+https://github.com/MLXPorts/mlx-precise@main"
 ```
 
 To install the CUDA backend on Linux, run:

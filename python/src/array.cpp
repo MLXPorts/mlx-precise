@@ -473,17 +473,18 @@ void init_array(nb::module_& m) {
             // Ensure host evaluation
             {
               nb::gil_scoped_release nogil;
-              a.eval();
+              mx::array ac = a; // eval requires non-const
+              ac.eval();
             }
             auto order = a.flags().col_contiguous ? 'F' : 'C';
-            // Expose a read-only memoryview to avoid extra copy where possible
-            nb::object mv = nb::memoryview(nb::bytes(a.data<char>(), a.nbytes()));
+            // Store a bytes copy of the payload
+            nb::object buf = nb::bytes(a.data<char>(), a.nbytes());
             nb::tuple shape = nb::steal<nb::tuple>(PyTuple_New(a.ndim()));
             for (int i = 0; i < a.ndim(); ++i) {
               PyTuple_SET_ITEM(shape.ptr(), i, nb::int_(a.shape(i)).release().ptr());
             }
             return nb::make_tuple(
-                mv,
+                buf,
                 shape,
                 static_cast<uint8_t>(a.dtype().val()),
                 nb::cast(order));
@@ -534,7 +535,23 @@ void init_array(nb::module_& m) {
               shape.push_back(nb::cast<int>(shape_t[i]));
             }
 
-            mx::Dtype dtype(val);
+            mx::Dtype dtype = mx::float32;
+            switch (val) {
+              case mx::Dtype::Val::bool_:    dtype = mx::bool_; break;
+              case mx::Dtype::Val::uint8:    dtype = mx::uint8; break;
+              case mx::Dtype::Val::uint16:   dtype = mx::uint16; break;
+              case mx::Dtype::Val::uint32:   dtype = mx::uint32; break;
+              case mx::Dtype::Val::uint64:   dtype = mx::uint64; break;
+              case mx::Dtype::Val::int8:     dtype = mx::int8; break;
+              case mx::Dtype::Val::int16:    dtype = mx::int16; break;
+              case mx::Dtype::Val::int32:    dtype = mx::int32; break;
+              case mx::Dtype::Val::int64:    dtype = mx::int64; break;
+              case mx::Dtype::Val::float16:  dtype = mx::float16; break;
+              case mx::Dtype::Val::float32:  dtype = mx::float32; break;
+              case mx::Dtype::Val::float64:  dtype = mx::float64; break;
+              case mx::Dtype::Val::bfloat16: dtype = mx::bfloat16; break;
+              case mx::Dtype::Val::complex64: dtype = mx::complex64; break;
+            }
             // Construct array and transpose if Fortran order
             mx::array tmp(data, shape, dtype);
             if (order == 'F') {

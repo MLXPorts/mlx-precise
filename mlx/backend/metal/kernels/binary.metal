@@ -98,6 +98,29 @@ instantiate_binary_base(NaNEqual, complex64, complex64_t, bool)
 instantiate_binary_all(LogicalOr, bool_, bool, bool)
 instantiate_binary_all(LogicalAnd, bool_, bool, bool)
 
+// Float64 operations using double-double arithmetic
+#include "mlx/backend/metal/kernels/binary_float64_ops.h"
+
+#define instantiate_binary_float64(op)                              \
+  instantiate_binary_all(op, double, double_precision, double_precision)
+
+#define instantiate_binary_float64_bool(op)                   \
+  instantiate_binary_all(op, double, double_precision, bool)
+
+instantiate_binary_float64(AddFloat64)
+instantiate_binary_float64(SubtractFloat64)
+instantiate_binary_float64(MultiplyFloat64)
+instantiate_binary_float64(DivideFloat64)
+instantiate_binary_float64(MaximumFloat64)
+instantiate_binary_float64(MinimumFloat64)
+
+instantiate_binary_float64_bool(EqualFloat64)
+instantiate_binary_float64_bool(NotEqualFloat64)
+instantiate_binary_float64_bool(LessFloat64)
+instantiate_binary_float64_bool(LessEqualFloat64)
+instantiate_binary_float64_bool(GreaterFloat64)
+instantiate_binary_float64_bool(GreaterEqualFloat64)
+
 // Bitwise ops only need integer types and bool (except for l/r shift)
 instantiate_binary_integer(BitwiseAnd)
 instantiate_binary_all(BitwiseAnd, bool_, bool, bool)

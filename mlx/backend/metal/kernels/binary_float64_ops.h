@@ -10,7 +10,9 @@
 using namespace mlx::core::metal;
 
 // Float64 is stored as float2 (hi, lo) in Metal
+// This typedef matches the type name used in kernel instantiation
 using float64_t = metal::float2;
+using double_precision = metal::float2;  // Alias for kernel instantiation
 
 // Convert float2 to double_double for computation
 inline double_double to_dd(float64_t x) {

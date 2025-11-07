@@ -101,11 +101,13 @@ instantiate_binary_all(LogicalAnd, bool_, bool, bool)
 // Float64 operations using double-double arithmetic
 #include "mlx/backend/metal/kernels/binary_float64_ops.h"
 
+// Use instantiate_binary_base (like complex64/int64) to avoid duplicate instantiations
+// Float2 already processes 2 values, so work_per_thread optimization not needed
 #define instantiate_binary_float64(op)                              \
-  instantiate_binary_all(op, double, double_precision, double_precision)
+  instantiate_binary_base(op, double, double_precision, double_precision)
 
 #define instantiate_binary_float64_bool(op)                   \
-  instantiate_binary_all(op, double, double_precision, bool)
+  instantiate_binary_base(op, double, double_precision, bool)
 
 instantiate_binary_float64(AddFloat64)
 instantiate_binary_float64(SubtractFloat64)

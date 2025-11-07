@@ -15,7 +15,7 @@
 
 #include <metal_stdlib>
 
-namespace mlx::core::metal {
+// Note: This header is used in Metal shaders, so types are in global namespace
 
 // ============================================================================
 // Double-Double Representation
@@ -65,7 +65,7 @@ inline double_double two_sum(float a, float b) {
 // Uses FMA for maximum accuracy
 inline double_double two_prod(float a, float b) {
     float p = a * b;
-    float e = metal::fma(a, b, -p);  // Error: a*b - round(a*b)
+    float e = fma(a, b, -p);  // Error: a*b - round(a*b)
     return double_double(p, e);
 }
 
@@ -151,13 +151,11 @@ inline double_double float_to_dd(float x) {
 // ============================================================================
 
 // Pack DD into float2 for storage
-inline metal::float2 pack_dd(double_double a) {
-    return metal::float2(a.hi, a.lo);
+inline float2 pack_dd(double_double a) {
+    return float2(a.hi, a.lo);
 }
 
 // Unpack float2 into DD
-inline double_double unpack_dd(metal::float2 v) {
+inline double_double unpack_dd(float2 v) {
     return double_double(v.x, v.y);
 }
-
-} // namespace mlx::core::metal

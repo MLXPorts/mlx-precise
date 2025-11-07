@@ -10,6 +10,7 @@
 
 **Key Enhancements:**
 - **True Double-Precision:** Correct exp underflows on CPU paths (no silent float32 downcasts)
+- **Float64 GPU Support:** First native float64 GPU implementation for Apple Silicon using double-double arithmetic (in development, branch: `feature/float64-metal-gpu`)
 - **Python 3.14 Free-Threading:** Full GIL-free operation support (cp314t builds)
 - **NumPy-Compatible API:** Drop-in replacement for NumPy in MLX workflows
 - **Part of MLX Ecosystem:** Used by [exo-mlx](https://github.com/MLXPorts/exo-mlx) and [opencv-mlx](https://github.com/MLXPorts/opencv-mlx)
@@ -33,6 +34,7 @@ pip install git+https://github.com/MLXPorts/mlx-precise@main
 
 **Branch Strategy:**
 - `main`: Tracks upstream MLX 0.29.x with precision patches + Python 3.14t support
+- `feature/float64-metal-gpu`: Float64 GPU support using double-double arithmetic
 - Version: `0.29.99.dev` (upstream-based with custom enhancements)
 
 **Upstream:** Based on [MLX v0.29.x](https://github.com/ml-explore/mlx/tree/v0.29.0)

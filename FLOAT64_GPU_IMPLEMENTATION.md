@@ -3,7 +3,7 @@
 ## Goal
 Add true `float64` dtype support on Apple Silicon GPUs using double-double (DD) arithmetic in Metal, since Metal doesn't have native `double` support.
 
-## Current Status: Foundation Complete ✓
+## Current Status: Foundation Complete
 
 ### What's Implemented
 
@@ -81,7 +81,7 @@ instantiate_binary_float64_bool(GreaterFloat64)
 instantiate_binary_float64_bool(GreaterEqualFloat64)
 ```
 
-**Challenge:** Need to verify the instantiate_kernel macros support float2 as a type.
+**Note:** Verify that instantiate_kernel macros support float2 as a type.
 
 ### Phase 2: C++ Dispatch Integration
 

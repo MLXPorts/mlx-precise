@@ -1,9 +1,9 @@
 # Float64 GPU Support - Implementation Status
 
 **Branch:** `feature/float64-metal-gpu`
-**Status:** ✅ Implementation Complete, ⏸️ Testing Pending (Build Issues)
+**Status:** Implementation Complete, Testing Pending (Build Issues)
 
-## ✅ What's Working
+## Completed Components
 
 ### 1. Metal Kernel Library
 **File:** `mlx/backend/metal/kernels/double_double.h`
@@ -11,24 +11,24 @@
 - Error-free transformations: Knuth's Two-Sum, FMA-based Two-Product
 - Operations: add, subtract, multiply, divide
 - Precision: ~30-32 digits (vs float32's 7-8)
-- **Status:** ✅ Compiles successfully in mlx.metallib
+- **Status:** Compiles successfully in mlx.metallib
 
 ### 2. Float64 Operations
 **File:** `mlx/backend/metal/kernels/binary_float64_ops.h`
 - Arithmetic: Add, Subtract, Multiply, Divide
 - Comparisons: Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual
 - Min/Max operations
-- **Status:** ✅ Instantiated in binary.metal
+- **Status:** Instantiated in binary.metal
 
 ### 3. C++ Integration
 **File:** `mlx/backend/metal/binary.cpp`
 - Modified `get_kernel_name()` to append "Float64" suffix for float64 dtype
 - Kernel names: `ss_AddFloat64double`, `vv_AddFloat64double`, etc.
-- **Status:** ✅ Dispatch logic in place
+- **Status:** Dispatch logic in place
 
 ### 4. Metal Shader Compilation
 **Command:** `ninja mlx-metallib`
-- **Result:** ✅ SUCCESS
+- **Result:** SUCCESS
 - All float64 kernels compiled into mlx.metallib
 - Located: `build/mlx.metallib`
 
@@ -40,9 +40,9 @@
 - Broadcasting
 - Comparisons
 - Min/Max
-- **Status:** ✅ Written, follows MLX patterns
+- **Status:** Written, follows MLX patterns
 
-## ⏸️ Pending Testing
+## Pending Testing
 
 ### Current Blocker
 Full library build fails with SDK/compiler issue (unrelated to float64 code):
@@ -180,4 +180,4 @@ Based on working implementation in Ember ML:
 
 ---
 
-**This is the first true float64 GPU implementation for Apple Silicon using MLX!** 🎉
+This implementation provides the first native float64 GPU support for Apple Silicon using MLX, utilizing double-double arithmetic to achieve extended precision on hardware that lacks native double-precision support.

@@ -41,8 +41,21 @@ uv.lock
 # vim
 *.swp
 
-# Ignore build dir
+# Ignore build directories (all variants)
 build/
+build*/
+build_*/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+DartConfiguration.tcl
+
+# Test artifacts
+test_roundtrip.npz
+*.npz
 
 # Prerequisites
 *.d

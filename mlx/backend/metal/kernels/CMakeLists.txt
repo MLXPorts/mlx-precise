@@ -5,7 +5,6 @@ set(BASE_HEADERS
     complex.h
     defines.h
     double_double.h
-    copy_float64.h
     erf.h
     expm1f.h
     utils.h)

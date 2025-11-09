@@ -6,20 +6,17 @@
 #pragma once
 
 #include "mlx/backend/metal/kernels/double_double.h"
+#include "mlx/backend/metal/kernels/float64.h"
 
-// Float64 is stored as float2 (hi, lo) in Metal
-// This typedef matches the type name used in kernel instantiation
-using float64_t = float2;
-using double_precision = float2;  // Alias for kernel instantiation
-
-// Convert float2 to double_double for computation
+// Convert float64_t to double_double for computation
 inline double_double to_dd(float64_t x) {
-  return unpack_dd(x);
+  return unpack_dd(float2(x.hi, x.lo));
 }
 
-// Convert double_double back to float2 for storage
+// Convert double_double back to float64_t for storage
 inline float64_t from_dd(double_double x) {
-  return pack_dd(x);
+  float2 packed = pack_dd(x);
+  return float64_t(packed.x, packed.y);
 }
 
 // ============================================================================
@@ -86,36 +83,36 @@ struct MinimumFloat64 {
 // Comparison operations (return bool)
 struct EqualFloat64 {
   bool operator()(float64_t x, float64_t y) {
-    return x.x == y.x && x.y == y.y;
+    return x.hi == y.hi && x.lo == y.lo;
   }
 };
 
 struct NotEqualFloat64 {
   bool operator()(float64_t x, float64_t y) {
-    return x.x != y.x || x.y != y.y;
+    return x.hi != y.hi || x.lo != y.lo;
   }
 };
 
 struct LessFloat64 {
   bool operator()(float64_t x, float64_t y) {
-    return (x.x < y.x) || (x.x == y.x && x.y < y.y);
+    return (x.hi < y.hi) || (x.hi == y.hi && x.lo < y.lo);
   }
 };
 
 struct LessEqualFloat64 {
   bool operator()(float64_t x, float64_t y) {
-    return (x.x < y.x) || (x.x == y.x && x.y <= y.y);
+    return (x.hi < y.hi) || (x.hi == y.hi && x.lo <= y.lo);
   }
 };
 
 struct GreaterFloat64 {
   bool operator()(float64_t x, float64_t y) {
-    return (x.x > y.x) || (x.x == y.x && x.y > y.y);
+    return (x.hi > y.hi) || (x.hi == y.hi && x.lo > y.lo);
   }
 };
 
 struct GreaterEqualFloat64 {
   bool operator()(float64_t x, float64_t y) {
-    return (x.x > y.x) || (x.x == y.x && x.y >= y.y);
+    return (x.hi > y.hi) || (x.hi == y.hi && x.lo >= y.lo);
   }
 };

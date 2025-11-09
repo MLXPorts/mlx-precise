@@ -3,7 +3,7 @@
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/copy.h"
-#include "mlx/backend/metal/kernels/copy_float64.h"
+#include "mlx/backend/metal/kernels/float64.h"
 
 #define instantiate_copy_work_per_thread(tname, itype, otype)         \
   instantiate_kernel("sn_copy" #tname, copy_s, itype, otype)          \
@@ -75,12 +75,5 @@ instantiate_copy_itype(float32, float)
 instantiate_copy_itype(bfloat16, bfloat16_t)
 instantiate_copy_itype(complex64, complex64_t)
 
-// Float64 requires specialized conversion kernels for CPU (double) <-> GPU (float2)
-// CPU storage: native double (IEEE 754)
-// GPU storage: float2 (double-double representation)
-instantiate_kernel("s_copydoubledouble", copy_s_double_float64, 1)
-instantiate_kernel("v_copydoubledouble", copy_v_double_float64, 1)
-instantiate_kernel("s_copydoublenumber_typedouble", copy_s_float64_double, 1)
-instantiate_kernel("v_copydoublenumber_typedouble", copy_v_float64_double, 1)
-instantiate_kernel("s_copydoublenumber_typedoublenumber_type", copy_v_float64_float64, 1)
-instantiate_kernel("v_copydoublenumber_typedoublenumber_type", copy_v_float64_float64, 1) // clang-format on
+// Float64 uses double-double representation {hi, lo} - same binary layout as complex64
+instantiate_copy_same(float64float64, float64_t) // clang-format on

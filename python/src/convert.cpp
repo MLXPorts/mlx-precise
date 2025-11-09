@@ -92,8 +92,17 @@ mx::array nd_array_to_mlx(
     return nd_array_to_mlx_contiguous<float>(
         nd_array, shape, dtype.value_or(mx::float32));
   } else if (type == nb::dtype<double>()) {
-    return nd_array_to_mlx_contiguous<double>(
-        nd_array, shape, dtype.value_or(mx::float64));
+    // Convert double to float64_t (double-double representation)
+    auto double_ptr = static_cast<const double*>(nd_array.data());
+    size_t size = 1;
+    for (auto s : shape) size *= s;
+
+    std::vector<mx::float64_t> converted(size);
+    for (size_t i = 0; i < size; i++) {
+      converted[i] = mx::float64_t(double_ptr[i]);  // Constructor does conversion
+    }
+
+    return mx::array(converted.data(), shape, dtype.value_or(mx::float64));
   } else if (type == nb::dtype<std::complex<float>>()) {
     return nd_array_to_mlx_contiguous<mx::complex64_t>(
         nd_array, shape, dtype.value_or(mx::complex64));
@@ -213,7 +222,7 @@ nb::object to_scalar(mx::array& a) {
     case mx::complex64:
       return nb::cast(a.item<std::complex<float>>());
     case mx::float64:
-      return nb::cast(a.item<double>());
+      return nb::cast(static_cast<double>(a.item<mx::float64_t>()));
     default:
       throw nb::type_error("type cannot be converted to Python scalar.");
   }
@@ -265,6 +274,8 @@ nb::object tolist(mx::array& a) {
       return to_list<mx::float16_t, float>(a, 0, 0);
     case mx::float32:
       return to_list<float>(a, 0, 0);
+    case mx::float64:
+      return to_list<mx::float64_t, double>(a, 0, 0);
     case mx::bfloat16:
       return to_list<mx::bfloat16_t, float>(a, 0, 0);
     case mx::complex64:

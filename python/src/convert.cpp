@@ -92,17 +92,17 @@ mx::array nd_array_to_mlx(
     return nd_array_to_mlx_contiguous<float>(
         nd_array, shape, dtype.value_or(mx::float32));
   } else if (type == nb::dtype<double>()) {
-    // Convert double to float64_t (double-double representation)
+    // Convert double to float64_t (double-double representation) efficiently
     auto double_ptr = static_cast<const double*>(nd_array.data());
     size_t size = 1;
     for (auto s : shape) size *= s;
 
-    std::vector<mx::float64_t> converted(size);
+    mx::array arr(shape, dtype.value_or(mx::float64));
+    auto out_ptr = reinterpret_cast<mx::float64_t*>(arr.data());
     for (size_t i = 0; i < size; i++) {
-      converted[i] = mx::float64_t(double_ptr[i]);  // Constructor does conversion
+      out_ptr[i] = mx::float64_t(double_ptr[i]);
     }
-
-    return mx::array(converted.data(), shape, dtype.value_or(mx::float64));
+    return arr;
   } else if (type == nb::dtype<std::complex<float>>()) {
     return nd_array_to_mlx_contiguous<mx::complex64_t>(
         nd_array, shape, dtype.value_or(mx::complex64));

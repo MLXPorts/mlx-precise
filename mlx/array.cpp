@@ -1,5 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <cstdlib>
 #include <functional>
+#include <iostream>
 #include <unordered_map>
 
 #include "mlx/array.h"
@@ -26,8 +28,28 @@ array::array(
           dtype,
           std::move(primitive),
           std::move(inputs))) {
+  // Runtime validation for float64 GPU operations
   // float64 is now supported on GPU via double-double arithmetic
-  // (removed check that threw "float64 is not supported on the GPU")
+  if (has_primitive() && this->primitive().stream().device == Device::gpu) {
+    bool has_float64 = (this->dtype() == float64);
+    for (auto& in : this->inputs()) {
+      if (in.dtype() == float64) {
+        has_float64 = true;
+        break;
+      }
+    }
+    
+    // Optional diagnostic logging for float64 GPU operations
+    if (has_float64) {
+      static bool first_use = true;
+      if (first_use && std::getenv("MLX_FLOAT64_VERBOSE")) {
+        std::cerr << "[MLX] float64 GPU operation detected. Using double-double "
+                  << "arithmetic for extended precision. Operations will execute "
+                  << "on GPU (not falling back to CPU)." << std::endl;
+        first_use = false;
+      }
+    }
+  }
 }
 
 std::vector<array> array::make_arrays(

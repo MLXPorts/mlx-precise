@@ -61,39 +61,68 @@ class TestDouble(mlx_tests.MLXTestCase):
         a = mx.random.normal(shape=shape)
         b = mx.random.normal(shape=shape)
 
-        a_double = a.astype(mx.float64, stream=mx.cpu)
-        b_double = b.astype(mx.float64, stream=mx.cpu)
+        # Test CPU
+        a_double_cpu = a.astype(mx.float64, stream=mx.cpu)
+        b_double_cpu = b.astype(mx.float64, stream=mx.cpu)
 
-        ops = [
+        # Test GPU (now supported via double-double arithmetic!)
+        if mx.default_device() == mx.gpu:
+            a_double_gpu = a.astype(mx.float64, stream=mx.gpu)
+            b_double_gpu = b.astype(mx.float64, stream=mx.gpu)
+
+        # Ops that work on both CPU and GPU
+        gpu_supported_ops = [
             mx.add,
-            mx.arctan2,
             mx.divide,
             mx.multiply,
             mx.subtract,
-            mx.logical_and,
-            mx.logical_or,
-            mx.remainder,
             mx.maximum,
             mx.minimum,
-            mx.power,
             mx.equal,
             mx.greater,
             mx.greater_equal,
             mx.less,
             mx.less_equal,
             mx.not_equal,
+        ]
+
+        # Ops that only work on CPU (not yet implemented for GPU)
+        cpu_only_ops = [
+            mx.arctan2,
+            mx.logical_and,
+            mx.logical_or,
+            mx.remainder,
+            mx.power,
             mx.logaddexp,
         ]
-        for op in ops:
-            if mx.default_device() == mx.gpu:
-                with self.assertRaises(ValueError):
-                    op(a_double, b_double)
-                continue
+
+        for op in gpu_supported_ops:
             y = op(a, b)
-            y_double = op(a_double, b_double)
+            y_double_cpu = op(a_double_cpu, b_double_cpu)
             self.assertTrue(
-                mx.allclose(y, y_double.astype(mx.float32, mx.cpu), equal_nan=True)
+                mx.allclose(y, y_double_cpu.astype(mx.float32, mx.cpu), equal_nan=True)
             )
+
+            # Test GPU
+            if mx.default_device() == mx.gpu:
+                y_double_gpu = op(a_double_gpu, b_double_gpu)
+                self.assertEqual(y_double_gpu.dtype, mx.float64)
+                # GPU and CPU results should match
+                self.assertTrue(
+                    mx.allclose(y_double_gpu, y_double_cpu, equal_nan=True)
+                )
+
+        for op in cpu_only_ops:
+            if mx.default_device() == mx.gpu:
+                # These ops not yet implemented for GPU float64
+                with self.assertRaises(ValueError):
+                    op(a_double_gpu, b_double_gpu)
+            else:
+                y = op(a, b)
+                y_double = op(a_double_cpu, b_double_cpu)
+                self.assertTrue(
+                    mx.allclose(y, y_double.astype(mx.float32, mx.cpu), equal_nan=True)
+                )
 
     def test_where(self):
         shape = (3, 3)

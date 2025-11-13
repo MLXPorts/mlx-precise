@@ -7,6 +7,7 @@
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/binary_ops.h"
+#include "mlx/backend/metal/kernels/binary_float64_ops.h"
 #include "mlx/backend/metal/kernels/binary.h"
 
 #define instantiate_binary_work_per_thread(op, tname, itype, otype)     \
@@ -50,6 +51,12 @@
   instantiate_binary_all(op, float32, float, float) \
   instantiate_binary_all(op, bfloat16, bfloat16_t, bfloat16_t)
 
+#define instantiate_binary_float_with_float64(op)   \
+  instantiate_binary_all(op, float16, half, half)   \
+  instantiate_binary_all(op, float32, float, float) \
+  instantiate_binary_base(op, float64, float64_t, float64_t) \
+  instantiate_binary_all(op, bfloat16, bfloat16_t, bfloat16_t)
+
 #define instantiate_binary_types(op)                              \
   instantiate_binary_all(op, bool_, bool, bool)                   \
   instantiate_binary_integer(op)                                  \
@@ -68,6 +75,7 @@
   instantiate_binary_base(op, int64, int64_t, bool)      \
   instantiate_binary_all(op, float16, half, bool)        \
   instantiate_binary_all(op, float32, float, bool)       \
+  instantiate_binary_base(op, float64, float64_t, bool)  \
   instantiate_binary_all(op, bfloat16, bfloat16_t, bool) \
   instantiate_binary_base(op, complex64, complex64_t, bool)
 
@@ -97,6 +105,31 @@ instantiate_binary_base(NaNEqual, complex64, complex64_t, bool)
 
 instantiate_binary_all(LogicalOr, bool_, bool, bool)
 instantiate_binary_all(LogicalAnd, bool_, bool, bool)
+
+// Float64 operations using double-double arithmetic
+#include "mlx/backend/metal/kernels/binary_float64_ops.h"
+
+// Use instantiate_binary_base (like complex64/int64) to avoid duplicate instantiations
+// Float2 already processes 2 values, so work_per_thread optimization not needed
+#define instantiate_binary_float64(op)                              \
+  instantiate_binary_base(op, float64, float64_t, float64_t)
+
+#define instantiate_binary_float64_bool(op)                   \
+  instantiate_binary_base(op, float64, float64_t, bool)
+
+instantiate_binary_float64(AddFloat64)
+instantiate_binary_float64(SubtractFloat64)
+instantiate_binary_float64(MultiplyFloat64)
+instantiate_binary_float64(DivideFloat64)
+instantiate_binary_float64(MaximumFloat64)
+instantiate_binary_float64(MinimumFloat64)
+
+instantiate_binary_float64_bool(EqualFloat64)
+instantiate_binary_float64_bool(NotEqualFloat64)
+instantiate_binary_float64_bool(LessFloat64)
+instantiate_binary_float64_bool(LessEqualFloat64)
+instantiate_binary_float64_bool(GreaterFloat64)
+instantiate_binary_float64_bool(GreaterEqualFloat64)
 
 // Bitwise ops only need integer types and bool (except for l/r shift)
 instantiate_binary_integer(BitwiseAnd)

@@ -23,6 +23,12 @@ Add true `float64` dtype support on Apple Silicon GPUs using double-double (DD) 
    - `double_double.h` added to BASE_HEADERS
    - Will be compiled into mlx.metallib
 
+4. **Runtime Validation** - Float64 GPU operation validation
+   - Added validation in array constructor to detect float64 GPU operations
+   - Provides diagnostic logging via `MLX_FLOAT64_VERBOSE` environment variable
+   - Confirms operations are executing on GPU (not falling back to CPU)
+   - Helps users verify and debug float64 GPU operations
+
 ## Architecture
 
 ### Storage Format
@@ -46,6 +52,34 @@ DD arithmetic: dd_add(to_dd(a), to_dd(b))
     ↓
 Result: float2 packed back to output buffer
 ```
+
+### Runtime Validation Usage
+
+The implementation includes optional diagnostic logging to help verify that float64 operations are executing on GPU:
+
+```python
+import os
+import mlx.core as mx
+
+# Enable verbose logging for float64 GPU operations
+os.environ['MLX_FLOAT64_VERBOSE'] = '1'
+
+# Create float64 arrays and perform GPU operations
+a = mx.array([1.0, 2.0, 3.0], dtype=mx.float64)
+b = mx.array([4.0, 5.0, 6.0], dtype=mx.float64)
+c = mx.add(a, b, stream=mx.gpu)  # Will print diagnostic message
+mx.eval(c)
+
+# Output: "[MLX] float64 GPU operation detected. Using double-double 
+#          arithmetic for extended precision. Operations will execute 
+#          on GPU (not falling back to CPU)."
+```
+
+The validation message is printed only once (on first float64 GPU operation) and only when `MLX_FLOAT64_VERBOSE` is set. This helps users:
+- Confirm float64 operations are actually running on GPU
+- Debug performance or accuracy issues
+- Understand that double-double arithmetic is being used
+
 
 ## Next Steps (In Order)
 
@@ -222,11 +256,13 @@ Submit the double-double library as a **utility** for users who need extended pr
 
 ```
 mlx-precise/
+├── mlx/
+│   └── array.cpp                          [Modified: Added float64 GPU validation]
 ├── mlx/backend/metal/kernels/
-│   ├── CMakeLists.txt                  [Modified: Added double_double.h]
-│   ├── double_double.h                 [New: DD arithmetic library]
-│   └── binary_float64_ops.h            [New: Float64 operations]
-└── FLOAT64_GPU_IMPLEMENTATION.md       [New: This file]
+│   ├── CMakeLists.txt                     [Modified: Added double_double.h]
+│   ├── double_double.h                    [New: DD arithmetic library]
+│   └── binary_float64_ops.h               [New: Float64 operations]
+└── FLOAT64_GPU_IMPLEMENTATION.md          [Modified: Added validation docs]
 ```
 
 ## Build Instructions
